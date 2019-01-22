@@ -1,0 +1,108 @@
+service: template
+
+
+custom:
+  config: "${file(./serverless.config.json)}"
+  environment: "${file(./serverless.env.json)}"
+  authorizer:
+    name: authorizer
+    resultTtlInSeconds: 0
+  cors:
+    origin: '*'
+    headers:
+      - Authorization
+      - Content-Type
+      - X-Amz-Date
+      - X-Amz-Security-Token
+      - X-Amz-User-Agent
+      - X-Api-Key
+    allowCredentials: false
+  contentEncoding:
+    contentCompression: 1400
+  apiGatewayCaching:
+    enabled: true
+    clusterSize: '0.5' # 1.6, 6.1
+    dataEncrypted: true
+    ttlInSeconds: 3600
+    perKeyInvalidation:
+      requireAuthorization: true
+      handleUnauthorizedRequests: Ignore
+  #warmup:
+  #  schedule: 'cron(0/5 8-17 ? * MON-FRI *)'
+  #  timeout: 20
+  #  prewarm: true
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  versionFunctions: false
+  region: "ca-central-1"
+  environment: "${self:custom.environment}" # TODO move to each function to prevent cross env leakage
+  endpointType: REGIONAL
+  # Required for RDS Access
+  vpc:
+    securityGroupIds:
+    - "${self:custom.config.VPC_SECURITY_GROUP_ID}"
+    subnetIds:
+    - "${self:custom.config.VPC_SUBNET_ID1}"
+    - "${self:custom.config.VPC_SUBNET_ID2}"
+  #iamRoleStatements:
+
+# Massive hack to prevent `EMFILE: too many open files, scandir`
+package:
+  individually: false
+  excludeDevDependencies: true
+  exclude:
+    - ./**
+  include:
+    - package.json
+    - node_modules/**
+    - '!node_modules/@commitlint/**'
+    - '!node_modules/husky/**'
+    - '!node_modules/lint-staged/**'
+    - '!node_modules/mocha/**'
+    - '!node_modules/prettier-standard-cli/**'
+    - '!node_modules/serverless/**'
+    - '!node_modules/serverless-*/**'
+    - '!node_modules/sinon/**'
+    - '!node_modules/standard-version/**'
+    - src/**
+
+functions:
+#  authorizer:
+#    handler: src/handlers/authorizer-auth0.handler
+#    description: Authorize API requests
+    #environmentVariables:
+    #  AUTH0_CLIENT_ID: ${self.custom.environment.AUTH0_CLIENT_ID}
+    #  AUTH0_CLIENT_SECRET: ${self.custom.environment.AUTH0_CLIENT_SECRET}
+  health:
+    description: Used for health checks
+    memorySize: 128
+    timeout: 30
+    handler: src/handlers/health.handler
+    events:
+      - http:
+          path: health
+          method: GET
+          cors: ${self:custom.cors}
+          caching:
+            enabled: true
+            ttlInSeconds: 300
+  
+  test-cache:
+    description: test endpoint to verify caching is working
+  test-compression: 
+    description: test endpoint to verify compression is working
+
+
+
+plugins:
+  - serverless-nested-stack
+  #- serverless-domain-manager # only if WAF not required
+  - serverless-api-compression
+  - serverless-api-gateway-caching
+  #- serverless-plugin-warmup  # if needed
+  - serverless-plugin-existing-s3
+  - serverless-mocha-plugin
+  - serverless-offline
+  - serverless-offline-scheduler
