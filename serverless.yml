@@ -29,7 +29,7 @@ custom:
       handleUnauthorizedRequests: Ignore
   #warmup:
   #  schedule: 'cron(0/5 8-17 ? * MON-FRI *)'
-  #  timeout: 20
+  #  timeout: 5
   #  prewarm: true
 
 provider:
@@ -41,11 +41,8 @@ provider:
   endpointType: REGIONAL
   # Required for RDS Access
   vpc:
-    securityGroupIds:
-    - "${self:custom.config.VPC_SECURITY_GROUP_ID}"
-    subnetIds:
-    - "${self:custom.config.VPC_SUBNET_ID1}"
-    - "${self:custom.config.VPC_SUBNET_ID2}"
+    securityGroupIds: "${self:custom.config.VPC_SECURITY_GROUP_IDS}"
+    subnetIds: "${self:custom.config.VPC_SUBNET_IDS}"
   #iamRoleStatements:
 
 # Massive hack to prevent `EMFILE: too many open files, scandir`
@@ -98,7 +95,9 @@ functions:
 
 plugins:
   - serverless-nested-stack
-  #- serverless-domain-manager # only if WAF not required
+  - serverless-pseudo-parameters
+  - serverless-plugin-tracing # X-Ray
+  #- serverless-domain-manager
   - serverless-api-compression
   - serverless-api-gateway-caching
   #- serverless-plugin-warmup  # if needed
