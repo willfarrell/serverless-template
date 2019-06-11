@@ -1,5 +1,6 @@
 const https = require('https');
 
+// Docs: https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-caching.html#invalidate-method-caching
 const app = async (event, context) => {
 
 

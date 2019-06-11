@@ -1,9 +1,32 @@
 service: template
 
+plugins:
+  - serverless-nested-stack             # Breaks CloudFormation into sub-parts, increase endpoint limit
+  #- serverless-pseudo-parameters
+  #- serverless-plugin-tracing # X-Ray
+  #- serverless-domain-manager
+  - serverless-api-compression          # Enable Response Compression
+  #- serverless-api-gateway-caching      # Enable API Caching - use middy-middleware-cache-redis instead
+  - serverless-plugin-warmup            # Pre-Warm Requests
+  - serverless-plugin-existing-s3       # Prevent creation of S3 Buckets, already exist
+  - serverless-mocha-plugin             # Integration testing
+  #- serverless-offline-scheduler
+  - serverless-offline-sns              # Local testing of SNS Events
+  - serverless-offline                  # Local testing of HTTP Events, needs to be last in the list
+
 
 custom:
-  config: "${file(./serverless.config.json)}"
-  environment: "${file(./serverless.env.json)}"
+  env: "${file(.env)}"
+  stage: ${opt:stage, 'development'}
+  region: ${opt:region, 'us-east-1'}
+  apiGatewayCaching:
+    enabled: true
+    clusterSize: '0.5' # 1.6, 6.1
+    dataEncrypted: true
+    ttlInSeconds: 3600
+    perKeyInvalidation:
+      requireAuthorization: true
+      handleUnauthorizedRequests: Ignore
   authorizer:
     name: authorizer
     resultTtlInSeconds: 0
@@ -19,33 +42,49 @@ custom:
     allowCredentials: false
   contentEncoding:
     contentCompression: 1400
-  apiGatewayCaching:
-    enabled: true
-    clusterSize: '0.5' # 1.6, 6.1
-    dataEncrypted: true
-    ttlInSeconds: 3600
-    perKeyInvalidation:
-      requireAuthorization: true
-      handleUnauthorizedRequests: Ignore
-  #warmup:
-  #  schedule: 'cron(0/5 8-17 ? * MON-FRI *)'
-  #  timeout: 5
-  #  prewarm: true
+  vpc:
+    securityGroupIds:
+      - "${ssm:/vpc/security_group~true}"
+    subnetIds: { 'Fn::Split': [ ",", "${ssm:/vpc/private_subnets~true}" ] }
+  warmup:
+    enabled: false
+    events:
+      - schedule: 'cron(0/15 * ? * MON-FRI *)'
+    prewarm: true
+    vpc: true
+  serverless-offline:
+    port: 3000
+  serverless-offline-sns:
+    port: 4002
+    debug: true
 
 provider:
   name: aws
-  runtime: nodejs8.10
-  versionFunctions: false
-  region: "ca-central-1"
-  environment: "${self:custom.environment}" # TODO move to each function to prevent cross env leakage
+  runtime: nodejs10.x
+  stage: ${self:custom.stage}
+  region: ${self:custom.region}
   endpointType: REGIONAL
+  versionFunctions: true
+  environment:
+    NODE_ENV: ${self:custom.stage}
+  apiKeys:
+    - "${self:service}-${self:custom.stage}-testing"
   # Required for RDS Access
-  vpc:
-    securityGroupIds: "${self:custom.config.VPC_SECURITY_GROUP_IDS}"
-    subnetIds: "${self:custom.config.VPC_SUBNET_IDS}"
-  #iamRoleStatements:
+  vpc: "${self:custom.vpc}"
+  iamRoleStatements:
+    # serverless-plugin-warmup
+    - Effect: 'Allow'
+      Action:
+        - 'lambda:InvokeFunction'
+      Resource:
+        - Fn::Join:
+            - ':'
+            - - arn:aws:lambda
+              - Ref: AWS::Region
+              - Ref: AWS::AccountId
+              - function:${self:service}-${opt:stage, self:provider.stage}-*
 
-# Massive hack to prevent `EMFILE: too many open files, scandir`
+# Massive hack to prevent `EMFILE: too many open files, scandir` and `Unzipped size must be smaller than 262144000 bytes`
 package:
   individually: false
   excludeDevDependencies: true
@@ -61,7 +100,6 @@ package:
     - '!node_modules/prettier-standard-cli/**'
     - '!node_modules/serverless/**'
     - '!node_modules/serverless-*/**'
-    - '!node_modules/sinon/**'
     - '!node_modules/standard-version/**'
     - src/**
 
@@ -77,6 +115,9 @@ functions:
     memorySize: 128
     timeout: 30
     handler: src/handlers/health.handler
+    warmup:
+      enabled: true
+      concurrency: 1
     events:
       - http:
           path: health
@@ -88,20 +129,45 @@ functions:
   
   test-cache:
     description: test endpoint to verify caching is working
-  test-compression: 
+  test-compression:
     description: test endpoint to verify compression is working
 
+  sample:
+    description: sample to show how to apply IAM to a lambda
+    memorySize: 128
+    timeout: 30
+    handler: src/handlers/health.handler
+    events:
+      - http:
+          path: sample
+          method: GET
+          cors: ${self:custom.cors}
+          caching:
+            enabled: true
+            ttlInSeconds: 300
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action: 'ssm:GetParametersByPath'
+        Resource:
+          - 'arn:aws:ssm:${self:custom.region}:#{AWS::AccountId}:parameter/postgres'
+          - 'arn:aws:ssm:${self:custom.region}:#{AWS::AccountId}:parameter/elasticsearch'
+          - 'arn:aws:ssm:${self:custom.region}:#{AWS::AccountId}:parameter/redis'
+      - Effect: 'Allow'
+        Action: 'TODO ES'
+        Resource:
+          - '${ssm:/elasticsearch/arn~true}'
+      - Effect: 'Allow'
+        Action:
+          - 'rds-db:connect'
+        Resource:
+          - '${ssm:/postgres/arn~true}'
+      - Effect: 'Allow'
+        Action: 'TODO S3'
+        Resource:
+          - 'arn:aws:*'
+      - Effect: 'Allow'
+        Action: 'TODO DynamoDB'
+        Resource:
+          - 'arn:aws:*'
 
 
-plugins:
-  - serverless-nested-stack
-  - serverless-pseudo-parameters
-  - serverless-plugin-tracing # X-Ray
-  #- serverless-domain-manager
-  - serverless-api-compression
-  - serverless-api-gateway-caching
-  #- serverless-plugin-warmup  # if needed
-  - serverless-plugin-existing-s3
-  - serverless-mocha-plugin
-  - serverless-offline
-  - serverless-offline-scheduler

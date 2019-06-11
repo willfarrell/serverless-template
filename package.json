@@ -1,29 +1,57 @@
 {
   "name": "serverless-template",
   "version": "1.0.0",
-  "description": "",
-  "directories": {
-    "lib": "lib"
-  },
-  "scripts": {
-    "start": "sls offline",
-    "test": "npm run test-unit && npm run test-integration",
-    "test-unit": "mocha",
-    "test-integration": "serverless invoke test"
-  },
+  "description": "Template to get your serverless project started right",
   "author": "willfarrell",
   "license": "MIT",
-  "devDependencies": {
-    "serverless": "^1.36.2",
-    "serverless-api-compression": "^1.0.1",
-    "serverless-api-gateway-caching": "^1.3.0",
-    "serverless-mocha-plugin": "^1.9.2",
-    "serverless-nested-stack": "^0.0.7",
-    "serverless-offline": "^4.1.4",
-    "serverless-offline-scheduler": "^0.3.7",
-    "serverless-plugin-existing-s3": "^2.3.0"
+  "scripts": {
+    "precommit": "lint-staged",
+    "release": "standard-version",
+    "start": "AWS_PROFILE=app-development serverless offline start --noAuth --stage=localhost --port=3000",
+    "lint": "prettier-standard 'src/**/*.{js,json}'",
+    "test": "npm run test-unit && npm run test-integration",
+    "test-unit": "mocha",
+    "test-integration": "serverless invoke test",
+    "deploy": "./node_modules/.bin/serverless deploy --SLS_DEBUG=* --verbose --force --stage=\"api\" --aws-profile=${AWS_PROFILE_NAME}-${ENVIRONMENT}"
   },
   "dependencies": {
+    "@middy/core": "1.0.0-alpha.22",
+    "@middy/cache": "1.0.0-alpha.22",
+    "@middy/do-not-wait-for-empty-event-loop": "1.0.0-alpha.22",
+    "@middy/error-logger": "1.0.0-alpha.22",
+    "@middy/function-shield": "1.0.0-alpha.22",
+    "@middy/http-content-negotiation": "1.0.0-alpha.22",
+    "@middy/http-cors": "1.0.0-alpha.22",
+    "@middy/http-error-handler": "1.0.0-alpha.22",
+    "@middy/http-event-normalizer": "1.0.0-alpha.22",
+    "@middy/http-header-normalizer": "1.0.0-alpha.22",
+    "@middy/http-json-body-parser": "1.0.0-alpha.22",
+    "@middy/http-security-headers": "1.0.0-alpha.22",
+    "@middy/http-urlencode-body-parser": "1.0.0-alpha.22",
+    "@middy/ssm": "1.0.0-alpha.22",
+    "@middy/validator": "1.0.0-alpha.22",
+    "@middy/warmup": "1.0.0-alpha.22",
+    "aws-sdk": "^2.176.0",
     "middy": "^0.20.0"
+  },
+  "devDependencies": {
+    "lint-staged": "^8.1.0",
+    "mocha": "^5.2.0",
+    "rewire": "^4.0.1",
+    "serverless": "^1.36.2",
+    "serverless-api-compression": "1.0.1",
+    "serverless-api-gateway-caching": "1.3.0",
+    "serverless-mocha-plugin": "1.9.2",
+    "serverless-nested-stack": "0.0.7",
+    "serverless-offline": "4.1.4",
+    "serverless-offline-scheduler": "0.3.7",
+    "serverless-offline-sns": "0.52.0",
+    "serverless-plugin-existing-s3": "2.3.0"
+  },
+  "lint-staged": {
+    "src/**/*.{js,json}": [
+      "prettier-standard",
+      "git add"
+    ]
   }
 }

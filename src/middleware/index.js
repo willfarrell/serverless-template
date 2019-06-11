@@ -5,7 +5,6 @@ const {
   urlEncodeBodyParser,
   jsonBodyParser,
   cors,
-  functionShield,
   httpErrorHandler,
   httpEventNormalizer,
   httpHeaderNormalizer,
@@ -14,6 +13,25 @@ const {
   validator,
   warmup
 } = require('middy/middlewares')
+
+/*
+const middy = require('@middy/core')
+const cache = require('@middy/cache')
+const doNotWaitForEmptyEventLoop = require('@middy/do-not-wait-for-empty-event-loop')
+const errorLogger = require('@middy/error-logger')
+const functionShield = require('@middy/function-shield')
+const httpContentNegotiation = require('@middy/http-content-negotiation')
+const httpCors = require('@middy/http-cors')
+const httpErrorHandler = require('@middy//http-error-handler')
+const httpEventNormalizer = require('@middy/http-event-normalizer')
+const httpHeaderNormalizer = require('@middy/http-header-normalizer')
+const httpJsonBodyParser = require('@middy/http-json-body-parser')
+const httpSecurityHeaders = require('@middy/http-security-headers')
+const httpUrlEncodeBodyParser = require('@middy/http-urlencode-body-parser')
+const ssm = require('@middy/ssm')
+const validator = require('@middy/validator')
+const warmup = require('@middy/warmup')
+*/
 
 const ajvOptions = {
   v5: true,
@@ -37,13 +55,18 @@ const response = {
 
 module.exports = (app, { inputSchema, outputSchema, accessRole }) =>
   middy(app)
+    .use(doNotWaitForEmptyEventLoop())  // catch any global DB comms
+    //.use(ssm()) // if DB vars in ssm
+    //.use(database())
+    //.use(knex())
     .use(warmup())
     .use(
       functionShield({
-        policy: { disable_analytics: true }
+        token: 'null',
+        disable_analytics: true
       })
     )
-    .use(doNotWaitForEmptyEventLoop())
+
     .use(httpEventNormalizer())
     .use(httpHeaderNormalizer())
     .use(urlEncodeBodyParser())
@@ -58,7 +81,7 @@ module.exports = (app, { inputSchema, outputSchema, accessRole }) =>
         availableMediaTypes: ['application/vnd.api+json']
       })
     )
-
+    //.use(ssm())
     //.use(authorization({ accessRole }))
     .use(validator({ inputSchema, outputSchema, ajvOptions }))
     .use(httpErrorHandler())
